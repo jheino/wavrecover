@@ -1,0 +1,83 @@
+#!/usr/bin/env python
+#
+# Copyright (c) 2010 Jukka Heino <jukka.heino@gmail.com>
+#
+# Permission to use, copy, modify, and distribute this software for any
+# purpose with or without fee is hereby granted, provided that the above
+# copyright notice and this permission notice appear in all copies.
+#
+# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+# WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+# MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+# ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+# ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+# OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+import sys
+import wave
+from operator import itemgetter
+from optparse import OptionParser
+
+def main(argv=None):
+	if argv is None:
+		argv = sys.argv[1:]
+
+	parser = OptionParser()
+	parser.add_option('-o', '--output', action='store', dest='output', help='output file')
+	(options, args) = parser.parse_args(argv)
+
+	if not options.output:
+		print 'Output file not specified.'
+		return 1
+
+	if not args:
+		print 'Input files not specified.'
+		return 1
+
+	# Store open file handles in this list
+	inputs = list()
+
+	for filename in args:
+		print 'Opening:', filename
+		input = wave.open(filename, 'rb')
+		inputs.append(input)
+
+	# Open output file with parameters from the last input file read
+	output = wave.open(options.output, 'wb')
+	output.setparams(input.getparams())
+
+	print 'Merging into:', options.output
+	statistics = dict()
+
+	while 1:
+		sectors = dict()
+
+		# Read a CD sector from each input file
+		for input in inputs:
+			sector = input.readframes(588)
+			if not sector: break
+			sectors[sector] = sectors.get(sector, 0) + 1
+		if not sector: break
+
+		# Get the best matching sector
+		sector, count = max(sectors.items(), key=itemgetter(1))
+		output.writeframes(sector)
+
+		# Update statistics
+		statistics[count - 1] = statistics.get(count - 1, 0) + 1
+
+	# Close input and output files
+	output.close()
+	for input in inputs:
+		input.close()
+
+	# Print statistics
+	print 'Statistics:'
+	for matches, count in statistics.items():
+		print '%d sectors with %d matching copies' % (count, matches)
+
+	return 0
+
+if __name__ == "__main__":
+	sys.exit(main())
